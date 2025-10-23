@@ -1,0 +1,184 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-896, -208],
+      "name": "8AM daily"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/curious_coder~linkedin-jobs-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"count\": 100, \"scrapeCompany\": true, \"urls\": [\"https://www.linkedin.com/jobs/search-results/?distance=50&f_TPR=r86400&geoId=102713980&keywords=AI%20and%20ML\"] }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-512, -208],
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here is the job posting information:\n\nCompany Name: {{ $json.companyName }}\n\nJob Posting Description: {{ $json.descriptionText}}",
+        "hasOutputParser": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [-96, -208],
+      "name": "Job Matching Agent"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [-48, -16],
+      "name": "Think"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-pro",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [-176, -16],
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"company_name\": \"string\", \"job_description\": \"string\", \"rating\": \"number\", \"justification\": \"string\" }"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [80, -16],
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [-304, -208],
+      "name": "Limit 5"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.output.rating.toNumber() }}",
+              "rightValue": 45,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [256, -208],
+      "name": "greater than 65"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [464, -224],
+      "name": "Limit 1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Job Posting Description: {{ $json.output.job_description }}\nCandidate's Original Resume: {{ $('Get Original Resume').item.json.content }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [512, 0],
+      "name": "Resume building Agent"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "documentURL": "YOUR_DOCUMENT_ID_HERE"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [-720, -208],
+      "name": "Get Original Resume"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process and format AI-generated HTML"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-784, 240],
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/upload/drive/v3/files/{{ $json.id }}?uploadType=media",
+        "sendBody": true,
+        "contentType": "raw",
+        "body": "={{ $('Code in JavaScript').item.json.html }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-400, 240],
+      "name": "Upload Updated Resume"
+    },
+    {
+      "parameters": {
+        "sendTo": "your_email@gmail.com",
+        "subject": "={{ $json.name }} Completed",
+        "emailType": "text",
+        "message": "={{ $json.name }} Completed\nHere it is: YOUR_GOOGLE_DRIVE_LINK"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [-16, 224],
+      "name": "Send a message"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.name }} Completed \n\nYOUR_GOOGLE_DRIVE_LINK"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [16, 448],
+      "name": "Send a text message1"
+    },
+    {
+      "parameters": {
+        "folderId": "YOUR_FOLDER_ID",
+        "title": "=Enhanced Resume:  {{ $('Limit 1').item.json.output.company_name }}"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [-608, 240],
+      "name": "updated resume"
+    }
+  ],
+  "connections": {},
+  "meta": {
+    "safeVersion": "public",
+    "instanceId": "removed-for-security"
+  }
+}
